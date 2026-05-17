@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: ar_chess_db
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=ar_games
+    ports:
+      - "5432:5432"
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: ar_chess_mqtt
+    restart: always
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  lobby_service:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: ar_chess_backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/ar_games
+      - MQTT_BROKER_HOST=mqtt
+      - MQTT_BROKER_PORT=1883
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - mqtt
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_URL=http://localhost:8000/api/v1
+        - VITE_MQTT_URL=ws://localhost:9001
+    container_name: ar_chess_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - lobby_service
+
+volumes:
+  postgres_data:

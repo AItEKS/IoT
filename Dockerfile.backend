@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Устанавливаем системные зависимости для PostgreSQL
+RUN apt-get update && apt-get install -y libpq-dev gcc && rm -rf /var/lib/apt/lists/*
+
+# Копируем зависимости
+COPY lobby_service/requirements.txt ./req_lobby.txt
+COPY game_engine_chess/requirements.txt ./req_engine.txt
+COPY stand_mock_service/requirements.txt ./req_mock.txt
+
+# Устанавливаем всё в один контейнер
+RUN pip install --no-cache-dir -r req_lobby.txt -r req_engine.txt -r req_mock.txt
+
+# Копируем исходный код
+COPY lobby_service ./lobby_service
+COPY game_engine_chess ./game_engine_chess
+COPY stand_mock_service ./stand_mock_service
+
+# Устанавливаем пути, чтобы Python находил пакеты
+ENV PYTHONPATH=/app
+ENV DOCKER_ENV=1
+
+# Переходим в лобби, накатываем миграции и запускаем сервер
+WORKDIR /app/lobby_service
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

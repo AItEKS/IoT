@@ -1,0 +1,48 @@
+{
+  "name": "Test Chess Game (First Moves)",
+  "steps": [
+    {
+      "step": 0,
+      "role": "white",
+      "comment": "Начальная расстановка (отправляется белым стендом)",
+      "delay_after": 5,
+      "payload": {
+        "rows": 8,
+        "cols": 8,
+        "matrix": [
+          {"id": 4, "cords": [0, 0], "turn": 0},
+          {"id": 1, "cords": [1, 4], "turn": 0}
+        ]
+      }
+    },
+    {
+      "step": 1,
+      "role": "white",
+      "comment": "Белые ходят пешкой e2-e4",
+      "delay_after": 5,
+      "payload": {
+        "rows": 8,
+        "cols": 8,
+        "matrix": [
+          {"id": 4, "cords": [0, 0], "turn": 0},
+          {"id": 1, "cords": [3, 4], "turn": 0}
+        ]
+      }
+    },
+    {
+      "step": 2,
+      "role": "black",
+      "comment": "Черные отвечают своей пешкой (имитация)",
+      "delay_after": 5,
+      "payload": {
+        "rows": 8,
+        "cols": 8,
+        "matrix": [
+          {"id": 4, "cords": [0, 0], "turn": 0},
+          {"id": 1, "cords": [3, 4], "turn": 0},
+          {"id": 11, "cords": [4, 4], "turn": 0}
+        ]
+      }
+    }
+  ]
+}
