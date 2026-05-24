@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 class GameStartRequest(BaseModel):
     player_black_id: str = "stand-black-mock"
-    scenario: str = "wrong_move"
+    scenario: str = "realistic_mate"
 
 class UserCreate(BaseModel):
     username: str

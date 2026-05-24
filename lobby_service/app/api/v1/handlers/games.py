@@ -1,90 +1,53 @@
 import uuid
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.api.v1.schemas import GameStartRequest
 from app.services.game_orchestrator import orchestrator
 from app.api.deps import get_current_user, get_db
-from app.db.models import User  
+from app.db.models import User, Stand
 
 router = APIRouter()
 
-class RealGameStartRequest(BaseModel):
+class InviteRequest(BaseModel):
     opponent_username: str
-    scenario: str = "normal_game"
-
-@router.post("/start-test")
-async def start_test_game(
-    request: GameStartRequest, 
-    current_user: User = Depends(get_current_user)
-):
-    game_id = f"game-{uuid.uuid4().hex[:8]}"
-    white_stand_id = f"stand-user-{current_user.username}" 
-    
-    if orchestrator.is_stand_busy(white_stand_id):
-        raise HTTPException(status_code=400, detail="Вы уже в игре!")
-
-    orchestrator.start_test_game(
-        game_id=game_id,
-        white_id=white_stand_id,
-        black_id=request.player_black_id,
-        scenario=request.scenario
-    )
-    
-    return {"status": "success", "game_id": game_id}
+    scenario: str = "realistic_mate"
+    use_mocks: bool = False
 
 @router.post("/invite")
-async def invite_to_game(
-    request: RealGameStartRequest, 
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    # Асинхронный поиск
-    result = await db.execute(select(User).filter(User.username == request.opponent_username))
-    opponent = result.scalars().first()
-    
-    if not opponent:
-        raise HTTPException(status_code=404, detail="Противник не найден")
+async def invite_to_game(request: InviteRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    res_opp = await db.execute(select(User).filter(User.username == request.opponent_username))
+    opponent = res_opp.scalars().first()
+    if not opponent: raise HTTPException(404, "Opponent not found")
 
-    white_stand_id = f"stand-user-{current_user.username}"
-    black_stand_id = f"stand-user-{opponent.username}"
-    
-    if orchestrator.is_stand_busy(white_stand_id) or orchestrator.is_stand_busy(black_stand_id):
-        raise HTTPException(status_code=400, detail="Один из игроков уже занят")
+    if request.use_mocks:
+        w_id = f"mock-w-{current_user.id}"
+        b_id = f"mock-b-{opponent.id}"
+    else:
+        res_w = await db.execute(select(Stand).filter(Stand.owner_id == current_user.id))
+        res_b = await db.execute(select(Stand).filter(Stand.owner_id == opponent.id))
+        w_stand, b_stand = res_w.scalars().first(), res_b.scalars().first()
+        if not w_stand or not b_stand: raise HTTPException(400, "Stands not linked")
+        w_id, b_id = w_stand.id, b_stand.id
+
+    if orchestrator.is_stand_busy(w_id) or orchestrator.is_stand_busy(b_id):
+        raise HTTPException(400, "One of the stands is busy")
 
     game_id = f"game-{uuid.uuid4().hex[:8]}"
-    
-    orchestrator.start_test_game(
-        game_id=game_id,
-        white_id=white_stand_id,
-        black_id=black_stand_id,
-        scenario=request.scenario
-    )
+    orchestrator.start_game(game_id, w_id, b_id, request.scenario, request.use_mocks)
+
+    from app.services.mqtt_listener import lobby_mqtt
+    lobby_mqtt.client.publish(f"notifications/user_{opponent.id}", json.dumps({"action": "game_started", "game_id": game_id}))
     
     return {"status": "success", "game_id": game_id}
 
 @router.get("/active")
 async def get_active_games():
-    active_games = []
-    for game_id in orchestrator.active_processes.keys():
-        active_games.append({"game_id": game_id, "status": "В процессе"})
-    return active_games
+    return [{"game_id": k, "status": "Live"} for k in orchestrator.active_processes.keys()]
 
 @router.post("/{game_id}/surrender")
-async def surrender_game(
-    game_id: str, 
-    current_user: User = Depends(get_current_user)
-):
-    if game_id not in orchestrator.active_processes:
-        raise HTTPException(status_code=404, detail="Игра не найдена")
-        
-    game_data = orchestrator.active_processes[game_id]
-    my_stand_id = f"stand-user-{current_user.username}"
-    
-    if my_stand_id not in game_data["stands"]:
-        raise HTTPException(status_code=403, detail="Это не ваша игра")
-        
+async def surrender_game(game_id: str, current_user: User = Depends(get_current_user)):
     orchestrator.stop_game(game_id, reason="aborted")
-    return {"status": "success", "message": "Игра завершена"}
+    return {"status": "success"}
