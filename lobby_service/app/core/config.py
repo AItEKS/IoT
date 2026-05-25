@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str = "super-secret-key-for-our-ar-game"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 60
 
     model_config = SettingsConfigDict(
         env_file=".env",

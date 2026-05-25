@@ -1,4 +1,3 @@
-// frontend/src/pages/GameView.jsx
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import mqtt from 'mqtt';
@@ -25,7 +24,7 @@ const GameView = () => {
     const [engineState, setEngineState] = useState(null);
     const [showExitModal, setShowExitModal] = useState(false);
     const [errorNote, setErrorNote] = useState(null);
-    const [isLongLoading, setIsLongLoading] = useState(false); // Для мягкого уведомления о долгой загрузке
+    const [isLongLoading, setIsLongLoading] = useState(false);
 
     const handleSurrender = async () => {
         try {
@@ -45,7 +44,7 @@ const GameView = () => {
                 fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR',
                 viewOnly: true,
                 coordinates: true,
-                animation: { enabled: true, duration: 200 },
+                animation: { enabled: true, duration: 250 },
                 drawable: { enabled: true }
             });
         }
@@ -63,9 +62,7 @@ const GameView = () => {
 
         client.on('message', (topic, message) => {
             try {
-                // Если пришло пустое сообщение (очистка retain), игнорируем
                 if (message.length === 0) return;
-                
                 const data = JSON.parse(message.toString());
                 
                 if (data.game_status === 'aborted') {
@@ -74,7 +71,7 @@ const GameView = () => {
                 }
 
                 setEngineState(data);
-                setIsLongLoading(false); // Данные пошли, отменяем статус долгой загрузки
+                setIsLongLoading(false);
 
                 if (cgRef.current) {
                     const shapes = [];
@@ -84,30 +81,38 @@ const GameView = () => {
                         data.status.forEach(s => {
                             const sq = coordsToSquare(s.square);
                             if (!sq) return;
+
                             if (s.description === 'check') checkSquare = sq;
                             else if (s.description === 'wrongmove') shapes.push({ orig: sq, brush: 'red' });
                             else if (s.description === 'missing_piece') shapes.push({ orig: sq, brush: 'blue' });
-                            else if (s.description === 'availble moves') shapes.push({ orig: sq, brush: 'green' });
+                            else if (s.description === 'available_moves') shapes.push({ orig: sq, brush: 'green' });
                         });
                     }
 
-                    cgRef.current.set({
+                    const cgConfig = {
                         fen: data.fen.split(' ')[0],
                         check: checkSquare,
                         lastMove: data.last_move ? [data.last_move.slice(0, 2), data.last_move.slice(2, 4)] : [],
                         drawable: { autoShapes: shapes }
-                    });
+                    };
+
+                    if (data.engine_state === "PIECE_LIFTED" && data.lifted_sq) {
+                        const liftedKey = coordsToSquare(data.lifted_sq);
+                        cgConfig.selected = liftedKey;
+                        cgConfig.highlight = { lastMove: true, check: true };
+                    } else {
+                        cgConfig.selected = null;
+                    }
+
+                    cgRef.current.set(cgConfig);
                 }
             } catch (e) {
                 console.error(e);
             }
         });
 
-        // БОЛЬШЕ НЕТ АГРЕССИВНОГО КИКА! Только мягкое предупреждение через 8 секунд.
         const timeout = setTimeout(() => {
-            if (!engineState) {
-                setIsLongLoading(true);
-            }
+            if (!engineState) setIsLongLoading(true);
         }, 8000);
 
         return () => {
@@ -118,7 +123,6 @@ const GameView = () => {
 
     return (
         <div className="min-h-screen bg-[#161512] text-[#bababa] p-4 font-sans selection:bg-orange-500/30 overflow-hidden">
-            
             {errorNote && (
                 <div className="fixed top-5 right-5 z-[100] bg-red-600 text-white px-6 py-3 rounded shadow-2xl animate-bounce text-sm font-bold uppercase tracking-widest">
                     {errorNote}
@@ -157,7 +161,6 @@ const GameView = () => {
                     </div>
                 )}
 
-                {/* НОВЫЙ БЛОК: Индикация загрузки */}
                 {!engineState && mqttStatus.includes('🟢') && (
                     <div className="mb-6 bg-blue-600/10 border border-blue-500/50 p-4 rounded-lg flex items-center justify-between animate-pulse">
                         <div className="flex items-center gap-4">
@@ -185,7 +188,6 @@ const GameView = () => {
                                     </div>
                                 </div>
                             )}
-
                             <div ref={boardRef} style={{ width: '560px', height: '560px' }} className="cg-board-wrapper" />
                         </div>
                     </div>
@@ -193,7 +195,6 @@ const GameView = () => {
                     <div className="lg:col-span-5 space-y-4">
                         <div className="bg-[#262421] p-8 rounded shadow-xl border border-[#3c3934]">
                             <h2 className="text-[10px] font-black text-[#7d7d7d] uppercase mb-8 tracking-[0.2em] border-b border-[#3c3934] pb-2">Информация</h2>
-                            
                             {engineState ? (
                                 <div className="space-y-8">
                                     <div className="flex justify-between items-center">
@@ -202,12 +203,11 @@ const GameView = () => {
                                             {engineState.is_white_turn ? 'БЕЛЫЕ' : 'ЧЕРНЫЕ'}
                                         </span>
                                     </div>
-
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="bg-[#1c1b18] p-4 rounded border border-[#3c3934]">
                                             <div className="text-[9px] text-[#7d7d7d] uppercase mb-2 font-bold opacity-50 tracking-widest">Движок</div>
                                             <div className={`font-mono text-xs uppercase font-black tracking-widest ${
-                                                engineState.engine_state === 'PLAYING' ? 'text-emerald-500' :
+                                                engineState.engine_state === 'PLAYING' ? 'text-emerald-400' :
                                                 engineState.engine_state === 'DESYNC' ? 'text-red-500' : 'text-orange-500'
                                             }`}>
                                                 {engineState.engine_state}
@@ -220,7 +220,6 @@ const GameView = () => {
                                             </div>
                                         </div>
                                     </div>
-
                                     <div className="bg-[#1c1b18] p-4 rounded border border-[#3c3934]">
                                         <div className="text-[9px] text-[#7d7d7d] uppercase mb-3 font-bold tracking-widest opacity-50">Текущий FEN</div>
                                         <div className="text-[10px] font-mono text-[#5e5b56] break-all leading-tight">
