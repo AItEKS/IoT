@@ -13,7 +13,7 @@ router = APIRouter()
 
 class InviteRequest(BaseModel):
     opponent_username: str
-    scenario: str = "realistic_mate"
+    scenario: str = "normal_game"
     use_mocks: bool = False
 
 @router.post("/invite")
